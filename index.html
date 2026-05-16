@@ -307,13 +307,10 @@
         #historico::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
     </style>
 
-    <!-- CENTRALIZAÇÃO DE EVENTOS E CONEXÃO FIREBASE ATUALIZADA (V10 MÓDULOS) -->
     <script type="module">
-        // Importações Oficiais do SDK Modular Web v10 do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Chaves atualizadas enviadas por você:
         const firebaseConfig = {
             apiKey: "AIzaSyAx6iY3Zgzig3d0hnknNdNd89zOMbMb_Tk",
             authDomain: "financasvini-9e2c0.firebaseapp.com",
@@ -324,7 +321,6 @@
             appId: "1:817955120550:web:363347dd4f20218cd01b67"
         };
 
-        // Lógica Global do Sistema Financeiro
         const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
         const dataHoje = new Date();
         const mesAtualStr = dataHoje.getMonth() + '-' + dataHoje.getFullYear();
@@ -343,7 +339,6 @@
         let totalReserva = 0, totalProjetos = 0, totalInvestimentos = 0;
         let saldosBancosGlobais = {};
 
-        // Configurações e datas iniciais de tela
         document.getElementById('data-lancamento').value = dataHoje.toISOString().split('T')[0];
         document.getElementById('data-atual').innerText = dataHoje.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
 
@@ -360,7 +355,6 @@
         const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
         document.getElementById('manifest-link').href = URL.createObjectURL(blob);
 
-        // Mapeamento e Escuta de Eventos (Obrigatório em Scripts de tipo 'module')
         document.getElementById('tab-home').addEventListener('click', () => mudarAba('home'));
         document.getElementById('tab-dash').addEventListener('click', () => mudarAba('dash'));
         document.getElementById('filtro-mes').addEventListener('change', renderizarDashboard);
@@ -402,12 +396,14 @@
             }
         }
 
+        function forcarFechamentoLoading() {
+            document.getElementById('loading').style.opacity = '0';
+            setTimeout(() => document.getElementById('loading').classList.add('hidden'), 500);
+        }
+
         async function iniciarFirebase() {
             carregarDadosLocais(); 
             atualizarInterfaceGlobal(); 
-            
-            document.getElementById('loading').style.opacity = '0';
-            setTimeout(() => document.getElementById('loading').classList.add('hidden'), 500);
 
             try {
                 const app = initializeApp(firebaseConfig);
@@ -422,13 +418,23 @@
                     transacoes = dadosNuvem.transacoes || []; 
                     contasBancarias = dadosNuvem.contasBancarias || contasBancarias; 
                     contasPagar = dadosNuvem.contasPagar || [];
-                    atualizarInterfaceGlobal(); 
                 } else {
+                    // Se não existir o documento na sua conta nova, inicia zerado por padrão
+                    transacoes = [];
+                    contasBancarias = [{ id: 'din', nome: '💵 Dinheiro em Espécie', saldoInicial: 0 }];
+                    contasPagar = [];
                     await setDoc(docRef, { transacoes, contasBancarias, contasPagar });
                 }
+                
+                atualizarInterfaceGlobal();
                 document.getElementById('icone-nuvem').classList.replace('text-blue-300', 'text-green-400');
-            } {
-                console.error("Firebase offline ou erro na inicialização", e); 
+            } catch (e) {
+                console.error("Erro na conexão ou permissões negadas do Firebase:", e);
+                // Inicia localmente se falhar, impedindo a tela azul de travar o app
+                carregarDadosLocais();
+                atualizarInterfaceGlobal();
+            } finally {
+                forcarFechamentoLoading();
             }
         }
 
@@ -590,7 +596,7 @@
 
             if(tipoAtual === 'transferencia') {
                 if(cOrig === cDest) { alert("A Origem e Destino devem ser diferentes!"); return; }
-                transacoes.unshift({ id: Date.now(), tipo: tipoAtual, valor: valorLancado, descricao: descricao, categoria: 'Transferência', contaOrigem: cOrig, nomeOrigem: obterNomeConta(cOrig), contaId: cDest, contaNome: obterNomeConta(cDest), data: dataLanc });
+                transacoes.unshift({ id: Date.now(), tipo: tipoAtual, valor: valorLancado, descricao: descricao, category: 'Transferência', contaOrigem: cOrig, nomeOrigem: obterNomeConta(cOrig), contaId: cDest, contaNome: obterNomeConta(cDest), data: dataLanc });
             } else {
                 transacoes.unshift({ id: Date.now(), tipo: tipoAtual, valor: valorLancado, descricao: descricao, categoria: document.getElementById('categoria').value, contaId: cDest, contaNome: obterNomeConta(cDest), data: dataLanc });
             }
@@ -817,7 +823,7 @@
             document.getElementById('dash-mes-desp').innerText = formatarMoeda(dadosMes.desp);
             document.getElementById('dash-mes-sobra').innerText = formatarMoeda(dadosMes.rec - dadosMes.desp);
 
-            const categoriasGrafico = {}; 
+            const categoriesGrafico = {}; 
             transacoes.forEach(t => { 
                 const mesA = getMesAnoDaTransacao(t.data); 
                 let keyVisivel = "";
@@ -827,15 +833,15 @@
                 }
                 
                 if(t.tipo === 'despesa' && keyVisivel === mesFiltrado) {
-                    categoriasGrafico[t.categoria] = (categoriasGrafico[t.categoria] || 0) + t.valor; 
+                    categoriesGrafico[t.categoria] = (categoriesGrafico[t.categoria] || 0) + t.valor; 
                     
                     if(!transacoesDoMesDetalhes[t.categoria]) transacoesDoMesDetalhes[t.categoria] = [];
                     transacoesDoMesDetalhes[t.categoria].push(t);
                 }
             });
             
-            const labelsGrafico = Object.keys(categoriasGrafico).sort((a,b) => categoriasGrafico[b] - categoriasGrafico[a]);
-            const dadosGrafico = labelsGrafico.map(l => categoriasGrafico[l]);
+            const labelsGrafico = Object.keys(categoriesGrafico).sort((a,b) => categoriesGrafico[b] - categoriesGrafico[a]);
+            const dadosGrafico = labelsGrafico.map(l => categoriesGrafico[l]);
             
             if (meuGrafico) { meuGrafico.destroy(); }
             const ctx = document.getElementById('graficoGastos').getContext('2d');
@@ -856,7 +862,7 @@
                 });
 
                 labelsGrafico.forEach((cat, index) => {
-                    const valorTotal = categoriasGrafico[cat];
+                    const valorTotal = categoriesGrafico[cat];
                     const color = bgColors[index % bgColors.length];
                     
                     let htmlItens = '';
@@ -884,7 +890,6 @@
             }
         }
 
-        // Inicialização automática do ecossistema
         iniciarFirebase();
     </script>
 </body>
